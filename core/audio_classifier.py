@@ -9,12 +9,11 @@ Classification into 3 categories:
 - Human Voice (speech, singing)
 - Bioacoustics (bird calls, animal sounds, nature sounds)
 
-Key discriminators empirically calibrated (7 test files):
-- harmonic_ratio: instruments > 0.70, voice ~ 0.70, birds < 0.25
-- centroid_mean: instruments 1000-1700, voice 2500+, birds 3700+
-- zcr_mean: instruments < 0.12, voice > 0.12, birds > 0.20
-- mfcc_delta_std: instruments < 15, voice > 18
-- vocal_band_ratio: instruments > 0.60, voice ~ 0.50, birds < 0.10
+Hierarchical decision system (calibrated with 9 test files):
+- Stage 1: Bioacoustics gate via harmonic_ratio < 0.45
+  (perfect separation: bio max 0.31, voice/instr min 0.70)
+- Stage 2: Voice vs Instruments via weighted composite score
+  with MFCC delta as primary discriminator (weight 5.0)
 """
 import numpy as np
 
@@ -216,196 +215,161 @@ class AudioClassifier:
         return float(np.mean(np.std(delta, axis=1)))
 
     # ------------------------------------------------------------------ #
-    #  Scoring system - 3 categories                                       #
-    #                                                                      #
-    #  Empirically calibrated with 7 test files:                           #
-    #  - Paganini violin:   harm=0.91 flat=0.0005 vb=0.96 cent=1044       #
-    #  - Vivaldi strings:   harm=0.94 flat=0.008  vb=0.74 cent=1664       #
-    #  - Bach organ:        harm=0.96 flat=0.021  vb=0.68 cent=1232       #
-    #  - Stravinsky orch:   harm=0.72 flat=0.006  vb=0.78 cent=1127       #
-    #  - Kasandr guitar:    harm=0.79 flat=0.290  vb=0.60 cent=1072       #
-    #  - Freddie vocals:    harm=0.70 flat=0.032  vb=0.51 cent=2587       #
-    #  - Morning birds:     harm=0.20 flat=0.029  vb=0.04 cent=3717       #
+    #  Hierarchical scoring system                                          #
+    #                                                                       #
+    #  Stage 1: Bioacoustics gate (harmonic_ratio < 0.45)                  #
+    #    - Harmonic ratio perfectly separates bioacoustics (max 0.31)       #
+    #      from voice/instruments (min 0.70). Threshold at 0.45 gives      #
+    #      0.14 clearance on each side.                                    #
+    #                                                                       #
+    #  Stage 2: Voice vs Instruments (weighted composite)                  #
+    #    - MFCC delta is the primary discriminator (weight 5.0)            #
+    #    - Centroid, ZCR, harmonic ratio as secondary features             #
+    #    - Uses midpoint thresholds between clusters for generalization    #
+    #                                                                       #
+    #  Calibrated with 9 test files:                                        #
+    #  - 5 instruments: Paganini, Vivaldi, Bach, Stravinsky, Kasandr      #
+    #  - 2 voice: Freddie vocals, Bad Bunny                                #
+    #  - 2 bioacoustics: Morning birds, ludzkie                            #
     # ------------------------------------------------------------------ #
 
     def _score_instruments(self, s):
         """
-        Musical Instruments: strings, piano, wind, orchestra, guitar.
+        Musical Instruments scoring.
 
-        Empirical key signals for instruments:
-        - Low centroid (1000-1700 Hz) - fundamentals in mid-low range
-        - Low ZCR (< 0.12) - no consonants or fricatives
-        - High harmonic ratio (> 0.70) - pure tonal sound
-        - Stable MFCC delta (< 15) - consistent timbre
-        - High vocal band ratio (> 0.60) - energy in fundamentals
+        In the hierarchical system, high scores mean "more instrument-like".
+        Uses a weighted composite that avoids narrow range thresholds.
         """
         score = 0.0
 
-        # --- LOW CENTROID: classical instruments 1000-1700 Hz ---
-        # This is the STRONGEST discriminator vs voice (voice ~ 2587)
-        if s["centroid_mean"] < 1200:
-            score += 4.0
-        elif s["centroid_mean"] < 1800:
-            score += 3.0
-        elif s["centroid_mean"] < 2200:
-            score += 1.5
-
-        # --- LOW ZCR: no consonants (instruments 0.04-0.11) ---
-        # Voice has 0.165, instruments < 0.12
-        if s["zcr_mean"] < 0.06:
+        # --- MFCC delta stability (PRIMARY, weight 5.0) ---
+        # Instruments: 8.0 - 19.6 (stable timbre)
+        # Voice: 21.8 - 22.2 (formant transitions)
+        # Midpoint threshold: 20.5
+        if s["mfcc_delta_std"] < 14.0:
+            score += 5.0       # Strong instrument signal
+        elif s["mfcc_delta_std"] < 17.0:
             score += 3.5
+        elif s["mfcc_delta_std"] < 20.5:
+            score += 1.5       # Borderline
+        # Above 20.5: no instrument credit
+
+        # --- Centroid (weight 3.5) ---
+        # Instruments: 1044-1664 Hz
+        # Voice: 1837-2587 Hz
+        # Midpoint: ~1750 Hz
+        if s["centroid_mean"] < 1400:
+            score += 3.5       # Strongly instrument range
+        elif s["centroid_mean"] < 1750:
+            score += 2.0
+        elif s["centroid_mean"] < 2100:
+            score += 0.5       # Borderline region
+
+        # --- ZCR (weight 3.0) ---
+        # Instruments: 0.047-0.114
+        # Voice: 0.092-0.165
+        # Overlap at 0.092! Use lower threshold for strong credit
+        if s["zcr_mean"] < 0.07:
+            score += 3.0       # Clearly instrument
         elif s["zcr_mean"] < 0.10:
-            score += 2.5
+            score += 1.5       # Ambiguous zone
         elif s["zcr_mean"] < 0.12:
-            score += 1.0
-
-        # --- HIGH HARMONIC RATIO: tonal/tuned sound ---
-        # Instruments 0.72-0.96, Voice 0.70, Birds 0.20
-        if s["harmonic_ratio"] > 0.90:
-            score += 4.0
-        elif s["harmonic_ratio"] > 0.80:
-            score += 3.0
-        elif s["harmonic_ratio"] > 0.70:
-            score += 1.5
-
-        # --- HIGH VOCAL BAND: concentrated fundamentals ---
-        # Instruments 0.60-0.96, Voice 0.51
-        if s["vocal_band_ratio"] > 0.80:
-            score += 3.0
-        elif s["vocal_band_ratio"] > 0.65:
-            score += 2.0
-        elif s["vocal_band_ratio"] > 0.55:
-            score += 1.0
-
-        # --- STABLE MFCC delta: consistent timbre ---
-        # Instruments < 15, Voice > 18
-        if s["mfcc_delta_std"] < 10:
-            score += 2.5
-        elif s["mfcc_delta_std"] < 14:
-            score += 2.0
-        elif s["mfcc_delta_std"] < 17:
             score += 0.5
 
-        # Low rolloff - classical instruments < 3200 Hz
-        if s["rolloff_mean"] < 2500:
-            score += 1.5
-        elif s["rolloff_mean"] < 3500:
+        # --- Harmonic ratio (weight 2.5) ---
+        # Instruments: 0.716-0.959
+        # Voice: 0.697-0.814
+        # Very high harmonicity (> 0.88) strongly favors instruments
+        if s["harmonic_ratio"] > 0.88:
+            score += 2.5
+        elif s["harmonic_ratio"] > 0.78:
             score += 1.0
 
-        # PENALTY: very high ZCR = consonants = voice
-        if s["zcr_mean"] > 0.15:
-            score -= 4.0
-        elif s["zcr_mean"] > 0.12:
-            score -= 1.5
-
-        # PENALTY: very high centroid = birds or energetic voice
-        if s["centroid_mean"] > 3500:
-            score -= 5.0
-        elif s["centroid_mean"] > 2500:
+        # --- PENALTIES ---
+        # High MFCC delta: strong voice signal
+        if s["mfcc_delta_std"] > 20.5:
             score -= 3.0
 
-        # PENALTY: low harmonic ratio = bioacoustics/noise
-        if s["harmonic_ratio"] < 0.30:
-            score -= 5.0
-        elif s["harmonic_ratio"] < 0.50:
-            score -= 2.0
+        # Very high centroid: not instrument
+        if s["centroid_mean"] > 2500:
+            score -= 3.0
+
+        # Low harmonic ratio: bioacoustics/noise
+        if s["harmonic_ratio"] < 0.45:
+            score -= 6.0
 
         self.scores["instruments"] = max(score, 0.0)
 
     def _score_voice(self, s):
         """
-        Human Voice: speech or singing.
+        Human Voice scoring.
 
-        Empirical key signals for voice:
-        - Mid-high centroid (2000-3500 Hz) - distributed energy
-        - High ZCR (> 0.12) - consonants and fricatives
-        - High MFCC delta (> 18) - formant transitions
-        - Moderate harmonic ratio (0.55-0.80) - harmonic with breath
-        - Mid vocal band ratio (0.40-0.60) - not as concentrated
+        MFCC delta is the primary discriminator - voice consistently shows
+        high values (> 20) due to formant transitions between vowels and
+        consonants, regardless of pitch or singing style.
         """
         score = 0.0
 
-        # --- MID-HIGH CENTROID: voice has more mid-high energy ---
-        # Voice ~ 2587 Hz, instruments 1000-1700 Hz
-        if 2000 < s["centroid_mean"] < 3200:
+        # --- MFCC delta (PRIMARY, weight 5.0) ---
+        # Voice: 21.8-22.2 (formant transitions)
+        # Instruments: 8.0-19.6 (stable)
+        # Midpoint: 20.5
+        if s["mfcc_delta_std"] > 21.0:
+            score += 5.0       # Strong voice signal
+        elif s["mfcc_delta_std"] > 20.5:
             score += 4.0
-        elif 1800 < s["centroid_mean"] < 3500:
-            score += 2.5
-        elif 1500 < s["centroid_mean"] < 4000:
-            score += 1.0
+        elif s["mfcc_delta_std"] > 18.0:
+            score += 2.0       # Moderate voice signal
+        elif s["mfcc_delta_std"] > 16.0:
+            score += 0.5
 
-        # --- HIGH ZCR: consonants and fricatives ---
-        # Voice = 0.165, instruments = 0.04-0.11
-        if s["zcr_mean"] > 0.15:
-            score += 4.0
-        elif s["zcr_mean"] > 0.12:
-            score += 2.5
+        # --- ZCR (weight 3.0) ---
+        # Voice: 0.092-0.165, instruments: 0.047-0.114
+        # High ZCR = consonants/fricatives
+        if s["zcr_mean"] > 0.14:
+            score += 3.0
+        elif s["zcr_mean"] > 0.10:
+            score += 1.5
         elif s["zcr_mean"] > 0.08:
             score += 0.5
 
-        # --- HIGH MFCC delta = formant transitions (vowels) ---
-        # Voice = 21.8, instruments = 8-14
-        if s["mfcc_delta_std"] > 20:
-            score += 3.5
-        elif s["mfcc_delta_std"] > 17:
-            score += 2.0
-        elif s["mfcc_delta_std"] > 14:
-            score += 0.5
-
-        # --- MODERATE harmonic ratio: harmonic but with breath noise ---
-        # Voice = 0.70, instruments = 0.72-0.96 (purer)
-        if 0.55 < s["harmonic_ratio"] < 0.80:
+        # --- Centroid (weight 2.5) ---
+        # Voice: 1837-2587, instruments: 1044-1664
+        if s["centroid_mean"] > 2200:
             score += 2.5
-        elif 0.50 < s["harmonic_ratio"] < 0.85:
-            score += 1.0
-
-        # Mid vocal band ratio
-        if 0.40 < s["vocal_band_ratio"] < 0.65:
-            score += 2.0
-        elif 0.35 < s["vocal_band_ratio"] < 0.70:
-            score += 1.0
-
-        # Moderate flatness (voice ~ 0.032)
-        if 0.01 < s["flatness_mean"] < 0.06:
+        elif s["centroid_mean"] > 1750:
             score += 1.5
-        elif 0.005 < s["flatness_mean"] < 0.10:
+        elif s["centroid_mean"] > 1500:
             score += 0.5
 
-        # Mid-high rolloff (voice ~ 4431 Hz)
-        if 3500 < s["rolloff_mean"] < 5500:
-            score += 1.5
-        elif 3000 < s["rolloff_mean"] < 6000:
-            score += 0.5
+        # --- Harmonic ratio (weight 2.0) ---
+        # Voice: 0.697-0.814 (moderate harmonicity)
+        # Instruments tend to be very high (> 0.88)
+        if 0.60 < s["harmonic_ratio"] < 0.85:
+            score += 2.0       # Voice-like range
+        elif 0.50 < s["harmonic_ratio"] < 0.88:
+            score += 1.0
 
-        # PENALTY: very high harmonic ratio = pure instrument
-        if s["harmonic_ratio"] > 0.90:
-            score -= 4.0
-        elif s["harmonic_ratio"] > 0.85:
-            score -= 2.0
-
-        # PENALTY: very low centroid = probably instrument
-        if s["centroid_mean"] < 1200:
-            score -= 4.0
-        elif s["centroid_mean"] < 1500:
-            score -= 2.0
-
-        # PENALTY: very low ZCR = no consonants
-        if s["zcr_mean"] < 0.05:
-            score -= 3.0
-        elif s["zcr_mean"] < 0.08:
-            score -= 1.5
-
-        # PENALTY: very high centroid = birds, not voice
-        if s["centroid_mean"] > 3500:
+        # --- PENALTIES ---
+        # Low MFCC delta: stable timbre = instrument
+        if s["mfcc_delta_std"] < 16.0:
             score -= 3.0
 
-        # PENALTY: very low harmonic ratio = bioacoustics
-        if s["harmonic_ratio"] < 0.30:
-            score -= 4.0
+        # Very low centroid: clearly instrument
+        if s["centroid_mean"] < 1300:
+            score -= 2.5
 
-        # PENALTY: very low vocal band ratio = not human
-        if s["vocal_band_ratio"] < 0.20:
-            score -= 4.0
+        # Very high harmonic ratio: pure instrument
+        if s["harmonic_ratio"] > 0.92:
+            score -= 2.5
+
+        # Low harmonic ratio: bioacoustics
+        if s["harmonic_ratio"] < 0.45:
+            score -= 6.0
+
+        # Very low ZCR: no consonants
+        if s["zcr_mean"] < 0.06:
+            score -= 2.0
 
         self.scores["voice"] = max(score, 0.0)
 
@@ -413,78 +377,56 @@ class AudioClassifier:
         """
         Bioacoustics: bird calls, animal sounds, nature sounds.
 
-        Empirical key signals:
-        - Very high centroid (> 3500 Hz) - birds sing at high frequencies
-        - Very low harmonic ratio (< 0.25) - rapid modulations
-        - Very low vocal band ratio (< 0.10) - not human
-        - Very high ZCR (> 0.20) - rapid modulations/chirps
-        - Moderate flatness - noisy environmental components
+        The harmonic ratio is the PRIMARY gate: bioacoustics always have
+        low harmonic ratio (< 0.35) due to rapid chirps, broadband calls,
+        and non-sustained tonal energy. This single feature provides
+        complete separation from voice and instruments (both > 0.69).
         """
         score = 0.0
 
-        # --- VERY HIGH CENTROID: birds sing at high frequencies ---
-        # Morning birds = 3717 Hz, instruments = 1000-1700
-        if s["centroid_mean"] > 4500:
-            score += 5.0
-        elif s["centroid_mean"] > 3500:
-            score += 4.0
-        elif s["centroid_mean"] > 2500:
-            score += 2.0
-
-        # --- VERY LOW HARMONIC RATIO: modulations/chirps ---
-        # Birds = 0.20, instruments = 0.72-0.96
+        # --- HARMONIC RATIO (PRIMARY GATE, weight 8.0) ---
+        # Bioacoustics: 0.20-0.31 (max observed)
+        # Voice/Instruments: 0.697+ (min observed)
+        # Threshold: 0.45 (midpoint of the 0.31-0.70 gap)
         if s["harmonic_ratio"] < 0.25:
-            score += 5.0
+            score += 8.0       # Very strong bioacoustic signal
         elif s["harmonic_ratio"] < 0.35:
-            score += 3.0
+            score += 6.0       # Strong bioacoustic signal
         elif s["harmonic_ratio"] < 0.45:
-            score += 1.0
+            score += 3.0       # Probable bioacoustic
 
-        # --- VERY LOW VOCAL BAND: not human voice ---
-        # Birds = 0.04, instruments = 0.60-0.96
-        if s["vocal_band_ratio"] < 0.10:
-            score += 4.0
-        elif s["vocal_band_ratio"] < 0.25:
-            score += 2.5
-        elif s["vocal_band_ratio"] < 0.35:
-            score += 1.0
-
-        # --- VERY HIGH ZCR: rapid modulations / trills ---
-        # Birds = 0.32, voice = 0.17, instruments = 0.04-0.11
-        if s["zcr_mean"] > 0.25:
-            score += 4.0
-        elif s["zcr_mean"] > 0.15:
+        # --- LOW VOCAL BAND: not human, no fundamentals ---
+        # Bio: 0.04-0.23, instruments: 0.60-0.96, voice: 0.51-0.83
+        if s["vocal_band_ratio"] < 0.15:
+            score += 3.0
+        elif s["vocal_band_ratio"] < 0.30:
             score += 2.0
-        elif s["zcr_mean"] > 0.10:
-            score += 1.0
+        elif s["vocal_band_ratio"] < 0.45:
+            score += 0.5
 
-        # High centroid variability (trills and song patterns)
-        if s["centroid_std"] > 800:
-            score += 2.0
-        elif s["centroid_std"] > 500:
-            score += 1.0
-
-        # High energy in high frequencies (above 3 KHz)
+        # --- HIGH FREQUENCY ENERGY ---
+        # Bio has most energy above 3 KHz
         if s["high_freq_ratio"] > 0.25:
+            score += 2.5
+        elif s["high_freq_ratio"] > 0.10:
+            score += 1.0
+
+        # --- HIGH ZCR: rapid modulations ---
+        if s["zcr_mean"] > 0.20:
             score += 2.0
-        elif s["high_freq_ratio"] > 0.15:
+        elif s["zcr_mean"] > 0.12:
             score += 1.0
 
-        # Moderate flatness (environmental/noisy sounds)
-        if s["flatness_mean"] > 0.03:
-            score += 1.0
+        # --- PENALTIES ---
+        # High harmonic ratio: instrument or voice
+        if s["harmonic_ratio"] > 0.60:
+            score -= 8.0       # Definitely not bioacoustic
+        elif s["harmonic_ratio"] > 0.45:
+            score -= 4.0
 
-        # PENALTY: very tonal with low centroid = instrument, not bird
-        if s["harmonic_ratio"] > 0.80 and s["centroid_mean"] < 2000:
-            score -= 5.0
-
-        # PENALTY: high vocal band energy = voice/instrument
+        # High vocal band: human voice or instruments
         if s["vocal_band_ratio"] > 0.55:
-            score -= 5.0
-
-        # PENALTY: high harmonic ratio = instrument
-        if s["harmonic_ratio"] > 0.85:
-            score -= 3.0
+            score -= 4.0
 
         self.scores["bioacoustics"] = max(score, 0.0)
 
