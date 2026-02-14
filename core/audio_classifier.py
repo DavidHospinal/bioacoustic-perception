@@ -114,8 +114,6 @@ class AudioClassifier:
         y_16k = y_16k.astype(np.float32)
 
         # 3. Frame audio into 15600 sample chunks (0.975s)
-        # Use simple tiling without overlap for speed, or 50% overlap for accuracy.
-        # Let's use no overlap for simplicity, discarding the last partial frame.
         num_samples = len(y_16k)
         num_frames = num_samples // self.INPUT_SIZE
         
@@ -127,15 +125,11 @@ class AudioClassifier:
         input_index = self.input_details[0]['index']
         output_index = self.output_details[0]['index']
         
-        # Accumulate scores for our 3 categories
-        category_scores = {
-            "voice": 0.0,
-            "instruments": 0.0,
-            "bioacoustics": 0.0
-        }
+        # Initialize accumulator for 521 classes
+        sum_outputs = np.zeros(521, dtype=np.float32)
+        valid_frames = 0
 
         # Process each frame
-        valid_frames = 0
         for i in range(num_frames):
             start = i * self.INPUT_SIZE
             end = start + self.INPUT_SIZE
@@ -148,53 +142,70 @@ class AudioClassifier:
             self.interpreter.invoke()
             output_data = self.interpreter.get_tensor(output_index)[0] # [521]
             
-            # Map YAMNet classes to our categories
-            # Voice: 0-66
-            # Instruments: 132-276
-            # Bioacoustics: 67-131 (Animals) + 277-293 (Nature)
-            
-            # Sum probabilites for each group
-            voice_prob = np.sum(output_data[0:67])
-            bio_prob = np.sum(output_data[67:132]) + np.sum(output_data[277:294])
-            instr_prob = np.sum(output_data[132:277])
-            
-            category_scores["voice"] += voice_prob
-            category_scores["instruments"] += instr_prob
-            category_scores["bioacoustics"] += bio_prob
+            # Accumulate
+            sum_outputs += output_data
             valid_frames += 1
 
-        # Average scores
         if valid_frames > 0:
-            for k in category_scores:
-                category_scores[k] /= valid_frames
-
-        # Determine winner
-        if not category_scores:
-            category = "instruments" 
-            self.confidence = 0.0
+            mean_output = sum_outputs / valid_frames
         else:
-            category = max(category_scores, key=category_scores.get)
-            max_score = category_scores[category]
-            total = sum(category_scores.values())
-            # Normalize confidence based on total meaningful energy
-            self.confidence = max_score / total if total > 0 else 0.0
+            mean_output = np.zeros(521)
             
-            # Scale scores for display (0-10 range approximation)
-            self.scores = {k: v * 10.0 for k, v in category_scores.items()}
-
-        label = self.CATEGORIES.get(category, "Unclassified")
+        # --- Classification Logic ---
         
-        # Build details string
-        details = self._build_details(category, stats, category_scores)
-
-        self.result = {
-            "category": category,
-            "label": label,
-            "confidence": self.confidence,
-            "scores": dict(sorted(self.scores.items(), key=lambda x: x[1], reverse=True)),
-            "stats": stats,
-            "details": details,
+        # 1. Get Top-1 YAMNet prediction
+        top_index = np.argmax(mean_output)
+        top_score = float(mean_output[top_index])
+        top_label = self.yamnet_classes[top_index] if self.yamnet_classes else "Unknown"
+        
+        # 2. Calculate Aggregated Category Scores
+        # Voice: 0-66
+        # Bioacoustics: 67-131 (Animals) + 277-293 (Nature)
+        # Instruments: 132-276
+        
+        voice_score = float(np.sum(mean_output[0:67]))
+        instr_score = float(np.sum(mean_output[132:277]))
+        bio_score = float(np.sum(mean_output[67:132]) + np.sum(mean_output[277:294]))
+        
+        category_scores = {
+            "voice": voice_score,
+            "instruments": instr_score,
+            "bioacoustics": bio_score
         }
+
+        # 3. Determine Final Category
+        is_voice = 0 <= top_index <= 66
+        is_bio = (67 <= top_index <= 131) or (277 <= top_index <= 293)
+        is_instr = 132 <= top_index <= 276
+        
+        is_mapped_category = is_voice or is_bio or is_instr
+        
+        if is_mapped_category:
+            # If the top class falls into our known buckets, use the bucket 
+            # with the highest AGGREGATE score. This handles cases like 
+            # "Audioslave" where multiple voice classes (singing, speech) 
+            # sum up to more than the top instrument class.
+            winner = max(category_scores, key=category_scores.get)
+            final_category = winner
+            final_label = self.CATEGORIES[winner]
+        else:
+            # Fallback for unmapped sounds (e.g. Vehicle, Silence, Siren)
+            # Use the specific label as the category key (normalized)
+            final_category = top_label.lower().replace(" ", "_")
+            final_label = top_label
+            # Add to scores for display
+            category_scores[final_category] = top_score
+
+        # Prepare Result
+        self.result = {
+            "category": final_category,
+            "label": final_label,
+            "confidence": float(max(voice_score, instr_score, bio_score, top_score)),
+            "scores": category_scores,
+            "stats": stats,
+            "details": f"Top: {top_label} ({top_score:.2f})"
+        }
+        
         return self.result
 
     def _compute_legacy_stats(self, features, y, sr):
