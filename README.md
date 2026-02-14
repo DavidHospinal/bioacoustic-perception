@@ -47,6 +47,17 @@ The application maps these 521 categories into three high-level classes:
 - **Human Voice:** Includes speech, singing, choir, and human sounds (YAMNet indices 0-66).
 - **Bioacoustics:** Includes animals (67-131) and nature sounds like wind or water (277-293).
 
+### Extended Capabilities (Fallback Mode)
+
+For sounds that do not fit into the three primary categories, the system employs a **fallback mechanism**. If the top prediction from YAMNet is outside the defined ranges for Voice, Instruments, or Bioacoustics, the classifier ignores the general mapping and returns the **specific YAMNet label**.
+
+Examples:
+- **Vehicle Sounds:** "Car", "Siren", "Engine" -> Displayed as "Car", "Siren", etc.
+- **Environmental Noise:** "Static", "Silence", "White noise" -> Displayed as "Static", "Silence", etc.
+- **Tools:** "Hammer", "Drill" -> Displayed as "Hammer", "Drill".
+
+This ensures accurate labeling for a wide range of real-world audio inputs without forcing them into incorrect musical or biological categories.
+
 This approach provides superior generalization compared to rule-based systems, especially for mixed audio or signals with ambiguous spectral features. If the model file is missing, the system falls back to a legacy rule-based classifier.
 
 ### Spectral Descriptors (Visualization Only)
