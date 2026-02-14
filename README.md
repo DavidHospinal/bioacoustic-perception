@@ -44,9 +44,15 @@ The system uses **YAMNet Lite**, a pre-trained deep neural network from Google, 
 **Adaptation Strategy:**
 To align with the project's multidimensional visualization goals, we aggregate these 521 granular classes into three broad perceptual categories based on the AudioSet ontology hierarchy:
 
-- **Musical Instruments:** Includes music, musical instruments, and specific genres (YAMNet indices 132-276).
-- **Human Voice:** Includes speech, singing, choir, and human sounds (YAMNet indices 0-66).
-- **Bioacoustics:** Includes animals (67-131) and nature sounds like wind or water (277-293).
+- **Musical Instruments:** Includes music, musical instruments, and specific genres (YAMNet indices 132-276):
+  <img width="1915" height="1013" alt="Bash" src="https://github.com/user-attachments/assets/399ce133-4941-4d48-aaf1-f94e56385374" />
+
+- **Human Voice:** Includes speech, singing, choir, and human sounds (YAMNet indices 0-66):
+  <img width="1904" height="1018" alt="Mercury" src="https://github.com/user-attachments/assets/21f0417e-260b-410d-beed-c64ad5feba4b" />
+
+- **Bioacoustics:** Includes animals (67-131) and nature sounds like wind or water (277-293):
+  <img width="1907" height="1024" alt="ruiseñor" src="https://github.com/user-attachments/assets/b6ec1820-58ae-46ff-8bd6-1e5a439e932d" />
+
 
 ### Extended Capabilities (Fallback Mode)
 
