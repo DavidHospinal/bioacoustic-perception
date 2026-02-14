@@ -39,32 +39,19 @@ Musical Instruments, Human Voice, or Bioacoustics.
 
 ### How the Classifier Works
 
-The classifier operates in three stages:
+The system uses **YAMNet Lite**, a pre-trained deep neural network from Google, to classify audio. YAMNet is trained on the AudioSet corpus (over 2 million human-labeled audio clips) and can identify 521 distinct audio event categories.
 
-**Stage 1 - Feature Extraction.** The complete audio signal is processed using librosa to
-compute frame-level spectral descriptors. These per-frame values are then averaged over the
-entire file duration to produce a single set of global statistics. This "listen to everything
-first" approach ensures the classifier captures the full spectral profile of the audio,
-rather than making premature decisions based on partial data.
+The application maps these 521 categories into three high-level classes:
 
-**Stage 2 - Bioacoustics Gate.** The harmonic ratio is evaluated first as a primary gate.
-Bioacoustic recordings (bird calls, animal sounds, nature) produce signals with low
-harmonic-to-percussive energy ratios (observed range: 0.20-0.31) due to rapid chirps,
-broadband calls, and non-sustained tonal energy. Voice and instruments consistently show
-high harmonic ratios (observed minimum: 0.70). A threshold at 0.45, positioned at the
-midpoint of this 0.39-wide gap, provides robust separation with 0.14 clearance on each side.
+- **Musical Instruments:** Includes music, musical instruments, and specific genres (YAMNet indices 132-276).
+- **Human Voice:** Includes speech, singing, choir, and human sounds (YAMNet indices 0-66).
+- **Bioacoustics:** Includes animals (67-131) and nature sounds like wind or water (277-293).
 
-**Stage 3 - Voice vs Instruments (Weighted Composite).** When the harmonic ratio exceeds 0.45,
-a weighted composite score determines whether the audio is voice or instruments. MFCC delta
-stability serves as the primary discriminator (weight 5.0), since voice consistently exhibits
-high MFCC delta values (>21) due to formant transitions between vowels and consonants,
-regardless of pitch or singing style. Instruments maintain stable timbre (<20). Secondary
-features (spectral centroid, ZCR, harmonic ratio) contribute smaller weights. All thresholds
-use midpoints between observed cluster boundaries to maximize generalization margin.
+This approach provides superior generalization compared to rule-based systems, especially for mixed audio or signals with ambiguous spectral features. If the model file is missing, the system falls back to a legacy rule-based classifier.
 
-### Spectral Descriptors Used for Classification
+### Spectral Descriptors (Visualization Only)
 
-The classifier extracts and evaluates the following descriptors from the raw audio signal:
+While the classification decision is made by YAMNet, the application still extracts the following spectral descriptors to drive the 3D visualization and provide detailed analysis in the UI:
 
 | Descriptor | Extraction Method | Physical Meaning |
 |---|---|---|
@@ -78,17 +65,6 @@ The classifier extracts and evaluates the following descriptors from the raw aud
 | Spectral flatness | Mean of `librosa.feature.spectral_flatness` | Measures how noise-like (flat) vs tonal (peaked) the spectrum is. Pure tonal instruments have very low flatness (<0.01), voice is moderate (~0.03), environmental sounds are higher. |
 | Chromatic variability | Frame-to-frame standard deviation of chromagram | Indicates polyphonic complexity. Orchestral music changes notes frequently (high variability), solo voice is more monophonic (low variability). |
 
-### Hierarchical Decision Thresholds
-
-| Stage | Decision | Primary Feature | Threshold | Secondary Features |
-|---|---|---|---|---|
-| Bioacoustics gate | Harmonic ratio < 0.45 | Harmonic ratio (weight 8.0) | Midpoint of 0.31-0.70 gap | Vocal band ratio, high freq ratio, ZCR |
-| Voice vs Instruments | Weighted composite | MFCC delta stability (weight 5.0) | Midpoint at 20.5 | Centroid (3.5), ZCR (3.0), harmonic ratio (2.5) |
-
-All thresholds were empirically calibrated against 9 test audio files spanning classical
-orchestral music, solo violin, organ, guitar, singing voice with accompaniment, isolated
-vocals, and two distinct bioacoustic recordings. The classifier does not use the filename
-or any metadata; it operates exclusively on the acoustic properties of the signal.
 
 ## System Requirements
 

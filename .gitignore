@@ -12,3 +12,5 @@ build/
 .idea/
 .vscode/
 *.log
+models/*.tflite
+models/*.csv
