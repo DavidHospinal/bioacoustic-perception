@@ -167,6 +167,17 @@ sound-visual/
 - FLAC
 - OGG/Vorbis
 
+## Test Samples
+
+The repository includes a `samples/` directory with diverse audio files for testing:
+
+- **Human Voice:** `Audioslave.mp3` (Vocals), `Somebody To Love...` (Vocals), `vozhuman.mp3`.
+- **Musical Instruments:** `Vivaldi-winter.mp3`, `Bach - Toccata...`, `Stravinsky...`, `Paganini...`.
+- **Bioacoustics:** `pajaro.mp3`, `raindog.mp3`, `Morning...Himalaya.mp3`.
+- **Others:** `Bad Bunny...`, `Kasandr.mp3`.
+
+You can use these files to verify the 3 main categories and the fallback mechanism, or load your own external files.
+
 ## References
 
 ### Audio-Visual Analysis and Sound Cognition

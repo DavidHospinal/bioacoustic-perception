@@ -5,7 +5,6 @@ __pycache__/
 .claude/
 .agent/
 tests/
-samples/
 *.egg-info/
 dist/
 build/
