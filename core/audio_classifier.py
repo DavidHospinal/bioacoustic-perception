@@ -163,6 +163,10 @@ class AudioClassifier:
         # Bioacoustics: 67-131 (Animals) + 277-293 (Nature)
         # Instruments: 132-276
         
+        # Use SUM of probabilities to capture the "energy" of the category.
+        # Multi-label outputs can sum > 1.0, which is useful for decision (robustness against single-class peaks),
+        # but we MUST normalize for display to avoid confusion (e.g. 328%).
+        
         voice_score = float(np.sum(mean_output[0:67]))
         instr_score = float(np.sum(mean_output[132:277]))
         bio_score = float(np.sum(mean_output[67:132]) + np.sum(mean_output[277:294]))
@@ -182,25 +186,28 @@ class AudioClassifier:
         
         if is_mapped_category:
             # If the top class falls into our known buckets, use the bucket 
-            # with the highest AGGREGATE score. This handles cases like 
-            # "Audioslave" where multiple voice classes (singing, speech) 
-            # sum up to more than the top instrument class.
+            # with the highest AGGREGATE score.
             winner = max(category_scores, key=category_scores.get)
             final_category = winner
             final_label = self.CATEGORIES[winner]
         else:
-            # Fallback for unmapped sounds (e.g. Vehicle, Silence, Siren)
-            # Use the specific label as the category key (normalized)
+            # Fallback for unmapped sounds
             final_category = top_label.lower().replace(" ", "_")
             final_label = top_label
-            # Add to scores for display
+            # Add raw top_score to category_scores for normalization context
             category_scores[final_category] = top_score
+
+        # 4. Normalize Scores for Display (0.0 - 1.0)
+        total_score = sum(category_scores.values())
+        if total_score > 0:
+            for k in category_scores:
+                category_scores[k] /= total_score
 
         # Prepare Result
         self.result = {
             "category": final_category,
             "label": final_label,
-            "confidence": float(max(voice_score, instr_score, bio_score, top_score)),
+            "confidence": float(category_scores[final_category]), # Use normalized confidence
             "scores": category_scores,
             "stats": stats,
             "details": f"Top: {top_label} ({top_score:.2f})"
