@@ -9,7 +9,7 @@ with audio playback. After full playback, an AI classifier categorizes the audio
 Musical Instruments, Human Voice, or Bioacoustics, using rule-based scoring grounded in
 empirically calibrated spectral descriptors.
 
-**Author:** Oscar David Hospinal Bibiano
+**Author:** Oscar David Hospinal R.
 **Contact:** oscardavid.hospinal@uc.cl
 **Institution:** Pontificia Universidad Catolica de Chile
 
@@ -34,14 +34,52 @@ empirically calibrated spectral descriptors.
 
 ## AI Classification
 
-After full playback, the system classifies the audio into one of three categories
-using global spectral descriptors averaged over the entire file:
+After full playback completes, the system classifies the audio into one of three categories:
+Musical Instruments, Human Voice, or Bioacoustics.
+
+### How the Classifier Works
+
+The classifier operates in two stages:
+
+**Stage 1 - Feature Extraction.** The complete audio signal is processed using librosa to
+compute frame-level spectral descriptors. These per-frame values are then averaged over the
+entire file duration to produce a single set of global statistics. This "listen to everything
+first" approach ensures the classifier captures the full spectral profile of the audio,
+rather than making premature decisions based on partial data.
+
+**Stage 2 - Rule-Based Scoring.** Each of the three categories receives a score computed
+from the global statistics. The category with the highest score wins. Scores are built
+by adding points when a descriptor falls within empirically calibrated ranges, and
+subtracting points (penalties) when values strongly contradict the category.
+
+### Spectral Descriptors Used for Classification
+
+The classifier extracts and evaluates the following descriptors from the raw audio signal:
+
+| Descriptor | Extraction Method | Physical Meaning |
+|---|---|---|
+| Spectral centroid | Mean of `librosa.feature.spectral_centroid` | Dominant frequency (Hz). Indicates where most energy is concentrated. Low for instruments (~1000-1700 Hz), mid-high for voice (~2500 Hz), high for birds (~3700 Hz). |
+| Zero crossing rate (ZCR) | Mean of `librosa.feature.zero_crossing_rate` | Rate at which the signal crosses zero amplitude. High values indicate consonants, fricatives, or rapid modulations. Voice (~0.165) has higher ZCR than instruments (~0.05-0.11) due to consonant phonemes. |
+| Harmonic ratio | HPSS decomposition via `librosa.effects.hpss` | Ratio of harmonic energy to total energy. Tuned instruments produce highly harmonic signals (0.72-0.96), voice is moderately harmonic (~0.70), and bioacoustics have low harmonicity (~0.20) due to rapid chirps. |
+| MFCC delta stability | Standard deviation of frame-to-frame MFCC differences | Measures how quickly the timbral characteristics change over time. Voice has high values (>18) due to transitions between vowels and consonants (formant shifts). Instruments maintain stable timbre (<15). |
+| Vocal band ratio | Energy in 80-1100 Hz band vs total (via STFT) | Proportion of energy in the fundamental vocal frequency range. High for instruments with low fundamentals (>0.60) and voice (~0.50), very low for birds (<0.10) that sing above 3 KHz. |
+| High frequency ratio | Energy above 3 KHz vs total (via STFT) | Proportion of energy in high frequencies. Bioacoustics have the highest values (>0.25), while instruments and voice concentrate energy below 3 KHz. |
+| Spectral rolloff | Mean of `librosa.feature.spectral_rolloff` | Frequency below which 85% of spectral energy is contained. Low rolloff indicates energy concentrated in low frequencies (instruments, voice). High rolloff indicates broad spectral spread (bioacoustics). |
+| Spectral flatness | Mean of `librosa.feature.spectral_flatness` | Measures how noise-like (flat) vs tonal (peaked) the spectrum is. Pure tonal instruments have very low flatness (<0.01), voice is moderate (~0.03), environmental sounds are higher. |
+| Chromatic variability | Frame-to-frame standard deviation of chromagram | Indicates polyphonic complexity. Orchestral music changes notes frequently (high variability), solo voice is more monophonic (low variability). |
+
+### Decision Thresholds per Category
 
 | Category | Key Discriminators |
 |---|---|
 | Musical Instruments | Low centroid (1000-1700 Hz), high harmonic ratio (>0.70), low ZCR (<0.12), stable MFCC delta (<15) |
-| Human Voice | Mid-high centroid (2000-3500 Hz), high ZCR (>0.12), high MFCC delta (>18), moderate harmonic ratio |
+| Human Voice | Mid-high centroid (2000-3500 Hz), high ZCR (>0.12), high MFCC delta (>18), moderate harmonic ratio (0.55-0.80) |
 | Bioacoustics | Very high centroid (>3500 Hz), low harmonic ratio (<0.25), very low vocal band (<0.10), high ZCR (>0.20) |
+
+All thresholds were empirically calibrated against 7 test audio files spanning classical
+orchestral music, solo violin, organ, guitar, singing voice, and bird/nature recordings.
+The classifier does not use the filename or any metadata; it operates exclusively on
+the acoustic properties of the signal.
 
 ## System Requirements
 
@@ -122,3 +160,24 @@ sound-visual/
 - WAV
 - FLAC
 - OGG/Vorbis
+
+## References
+
+McAdams, S. (1993). Recognition of sound sources and events. In S. McAdams & E. Bigand (Eds.),
+*Thinking in Sound: The Cognitive Psychology of Human Audition* (pp. 146-198). Oxford University Press.
+DOI: 10.1093/acprof:oso/9780198524897.003.0006.
+PDF: https://www.mcgill.ca/mpcl/files/mpcl/mcadams_thinkingsound_1993.pdf
+
+Wattenberg, M. (2002). Arc Diagrams: Visualizing Structure in Strings.
+*IEEE Symposium on Information Visualization (InfoVis 2002)*.
+DOI: 10.1109/INFVIS.2002.1173157.
+PDF: http://hint.fm/papers/arc-diagrams.pdf
+
+Mueller, M. (2007). *Information Retrieval for Music and Motion*. Springer.
+ISBN: 978-3-540-74047-6. DOI: 10.1007/978-3-540-74048-3.
+https://books.google.com/books/about/Information_Retrieval_for_Music_and_Moti.html?id=uhwIvgAACAAJ
+
+Dieleman, S. & Schrauwen, B. (2014). End-to-end learning for music audio tagging at scale.
+*Proceedings of the IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP 2014)*.
+DOI: 10.1109/ICASSP.2014.6853581.
+PDF: http://dihana.cps.unizar.es/proceedings/ICASSP/2014/papers/p7014-dieleman.pdf
