@@ -163,6 +163,8 @@ sound-visual/
 
 ## References
 
+### Audio-Visual Analysis and Sound Cognition
+
 McAdams, S. (1993). Recognition of sound sources and events. In S. McAdams & E. Bigand (Eds.),
 *Thinking in Sound: The Cognitive Psychology of Human Audition* (pp. 146-198). Oxford University Press.
 DOI: 10.1093/acprof:oso/9780198524897.003.0006.
@@ -181,3 +183,62 @@ Dieleman, S. & Schrauwen, B. (2014). End-to-end learning for music audio tagging
 *Proceedings of the IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP 2014)*.
 DOI: 10.1109/ICASSP.2014.6853581.
 PDF: http://dihana.cps.unizar.es/proceedings/ICASSP/2014/papers/p7014-dieleman.pdf
+
+### Spectral Centroid and Rolloff
+
+Ghisingh, L. & Pandey, K. K. (2018). Music Genre Classification Using Spectral Analysis.
+*arXiv preprint arXiv:1803.04652*.
+PDF: https://arxiv.org/pdf/1803.04652.pdf
+
+Classification of Biological Sounds Using Spatial Directivity (2025).
+*Forum Acusticum 2025*.
+PDF: https://dael.euracoustics.org/confs/fa2025/data/articles/000816.pdf
+
+### Zero Crossing Rate (ZCR)
+
+Bachu, R. G. et al. (2011). Noise robust zero-crossing rate computation for audio signal classification.
+*IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP 2011)*.
+DOI: 10.1109/ICASSP.2011.5947564.
+
+### Harmonic Ratio and Harmonicity
+
+Marxer, R. et al. (2025). Bioacoustic fundamental frequency estimation.
+*Accepted Manuscript*.
+PDF: https://www.ricardmarxer.com/assets/f0-examples/Accepted_Manuscript_Best_Marxer_et_al_2025.pdf
+
+### MFCC Delta Stability
+
+Kumar, K., Kim, C. & Stern, R. M. (2011). Delta-spectral cepstral coefficients for robust speech recognition.
+*IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP 2011)*.
+PDF: https://www.cs.cmu.edu/afs/cs/user/robust/www/Papers/KumarKimSternICA11.pdf
+
+Jothilakshmi, S. (2014). Delta-MFCC Based Text-Independent Speaker Recognition.
+*International Journal of Engineering Development and Research (IJEDR), 2(3)*.
+PDF: https://rjwave.org/ijedr/viewpaperforall.php?paper=IJEDR1403017
+
+### Band Ratios and Spectral Flatness
+
+Herrera, P. et al. Automatic Classification of Musical Instrument Sounds.
+*Universitat Pompeu Fabra*.
+PDF: https://repositori.upf.edu/bitstreams/2ddfbd22-c9be-428a-9277-
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+## Citation
+
+If you use this project in your research or work, please cite it as follows:
+
+```bibtex
+@misc{sound-visual-bioacoustic-perception,
+    title = {Sound-Visual: Audio-Visual Analysis with AI Classification},
+    type = {Open Source Software},
+    author = {Hospinal R., Oscar David},
+    howpublished = {\url{https://github.com/DavidHospinal/-bioacoustic-perception}},
+    url = {https://github.com/DavidHospinal/-bioacoustic-perception},
+    institution = {Pontificia Universidad Catolica de Chile},
+    year = {2026},
+    month = {feb}
+}
+```
