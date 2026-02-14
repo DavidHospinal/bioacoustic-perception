@@ -39,7 +39,7 @@ Musical Instruments, Human Voice, or Bioacoustics.
 
 ### How the Classifier Works
 
-The classifier operates in two stages:
+The classifier operates in three stages:
 
 **Stage 1 - Feature Extraction.** The complete audio signal is processed using librosa to
 compute frame-level spectral descriptors. These per-frame values are then averaged over the
@@ -47,10 +47,20 @@ entire file duration to produce a single set of global statistics. This "listen 
 first" approach ensures the classifier captures the full spectral profile of the audio,
 rather than making premature decisions based on partial data.
 
-**Stage 2 - Rule-Based Scoring.** Each of the three categories receives a score computed
-from the global statistics. The category with the highest score wins. Scores are built
-by adding points when a descriptor falls within empirically calibrated ranges, and
-subtracting points (penalties) when values strongly contradict the category.
+**Stage 2 - Bioacoustics Gate.** The harmonic ratio is evaluated first as a primary gate.
+Bioacoustic recordings (bird calls, animal sounds, nature) produce signals with low
+harmonic-to-percussive energy ratios (observed range: 0.20-0.31) due to rapid chirps,
+broadband calls, and non-sustained tonal energy. Voice and instruments consistently show
+high harmonic ratios (observed minimum: 0.70). A threshold at 0.45, positioned at the
+midpoint of this 0.39-wide gap, provides robust separation with 0.14 clearance on each side.
+
+**Stage 3 - Voice vs Instruments (Weighted Composite).** When the harmonic ratio exceeds 0.45,
+a weighted composite score determines whether the audio is voice or instruments. MFCC delta
+stability serves as the primary discriminator (weight 5.0), since voice consistently exhibits
+high MFCC delta values (>21) due to formant transitions between vowels and consonants,
+regardless of pitch or singing style. Instruments maintain stable timbre (<20). Secondary
+features (spectral centroid, ZCR, harmonic ratio) contribute smaller weights. All thresholds
+use midpoints between observed cluster boundaries to maximize generalization margin.
 
 ### Spectral Descriptors Used for Classification
 
@@ -58,28 +68,27 @@ The classifier extracts and evaluates the following descriptors from the raw aud
 
 | Descriptor | Extraction Method | Physical Meaning |
 |---|---|---|
-| Spectral centroid | Mean of `librosa.feature.spectral_centroid` | Dominant frequency (Hz). Indicates where most energy is concentrated. Low for instruments (~1000-1700 Hz), mid-high for voice (~2500 Hz), high for birds (~3700 Hz). |
-| Zero crossing rate (ZCR) | Mean of `librosa.feature.zero_crossing_rate` | Rate at which the signal crosses zero amplitude. High values indicate consonants, fricatives, or rapid modulations. Voice (~0.165) has higher ZCR than instruments (~0.05-0.11) due to consonant phonemes. |
-| Harmonic ratio | HPSS decomposition via `librosa.effects.hpss` | Ratio of harmonic energy to total energy. Tuned instruments produce highly harmonic signals (0.72-0.96), voice is moderately harmonic (~0.70), and bioacoustics have low harmonicity (~0.20) due to rapid chirps. |
-| MFCC delta stability | Standard deviation of frame-to-frame MFCC differences | Measures how quickly the timbral characteristics change over time. Voice has high values (>18) due to transitions between vowels and consonants (formant shifts). Instruments maintain stable timbre (<15). |
-| Vocal band ratio | Energy in 80-1100 Hz band vs total (via STFT) | Proportion of energy in the fundamental vocal frequency range. High for instruments with low fundamentals (>0.60) and voice (~0.50), very low for birds (<0.10) that sing above 3 KHz. |
-| High frequency ratio | Energy above 3 KHz vs total (via STFT) | Proportion of energy in high frequencies. Bioacoustics have the highest values (>0.25), while instruments and voice concentrate energy below 3 KHz. |
+| Spectral centroid | Mean of `librosa.feature.spectral_centroid` | Dominant frequency (Hz). Indicates where most energy is concentrated. Low for instruments (~1000-1700 Hz), mid-high for voice (~1800-2600 Hz), high for bioacoustics (~2100-3700 Hz). |
+| Zero crossing rate (ZCR) | Mean of `librosa.feature.zero_crossing_rate` | Rate at which the signal crosses zero amplitude. High values indicate consonants, fricatives, or rapid modulations. Voice (~0.09-0.17) has higher ZCR than instruments (~0.05-0.11) due to consonant phonemes. |
+| Harmonic ratio | HPSS decomposition via `librosa.effects.hpss` | Ratio of harmonic energy to total energy. Tuned instruments produce highly harmonic signals (0.72-0.96), voice is moderately harmonic (0.70-0.81), and bioacoustics have low harmonicity (0.20-0.31) due to rapid chirps. This is the primary bioacoustics gate. |
+| MFCC delta stability | Standard deviation of frame-to-frame MFCC differences | Measures how quickly the timbral characteristics change over time. Voice has high values (>21) due to transitions between vowels and consonants (formant shifts). Instruments maintain stable timbre (<20). This is the primary voice vs instruments discriminator. |
+| Vocal band ratio | Energy in 80-1100 Hz band vs total (via STFT) | Proportion of energy in the fundamental vocal frequency range. High for instruments with low fundamentals (0.60-0.96), variable for voice (0.51-0.83), very low for bioacoustics (0.04-0.23). |
+| High frequency ratio | Energy above 3 KHz vs total (via STFT) | Proportion of energy in high frequencies. Bioacoustics have the highest values (0.28-0.44), while instruments and voice concentrate energy below 3 KHz. |
 | Spectral rolloff | Mean of `librosa.feature.spectral_rolloff` | Frequency below which 85% of spectral energy is contained. Low rolloff indicates energy concentrated in low frequencies (instruments, voice). High rolloff indicates broad spectral spread (bioacoustics). |
 | Spectral flatness | Mean of `librosa.feature.spectral_flatness` | Measures how noise-like (flat) vs tonal (peaked) the spectrum is. Pure tonal instruments have very low flatness (<0.01), voice is moderate (~0.03), environmental sounds are higher. |
 | Chromatic variability | Frame-to-frame standard deviation of chromagram | Indicates polyphonic complexity. Orchestral music changes notes frequently (high variability), solo voice is more monophonic (low variability). |
 
-### Decision Thresholds per Category
+### Hierarchical Decision Thresholds
 
-| Category | Key Discriminators |
-|---|---|
-| Musical Instruments | Low centroid (1000-1700 Hz), high harmonic ratio (>0.70), low ZCR (<0.12), stable MFCC delta (<15) |
-| Human Voice | Mid-high centroid (2000-3500 Hz), high ZCR (>0.12), high MFCC delta (>18), moderate harmonic ratio (0.55-0.80) |
-| Bioacoustics | Very high centroid (>3500 Hz), low harmonic ratio (<0.25), very low vocal band (<0.10), high ZCR (>0.20) |
+| Stage | Decision | Primary Feature | Threshold | Secondary Features |
+|---|---|---|---|---|
+| Bioacoustics gate | Harmonic ratio < 0.45 | Harmonic ratio (weight 8.0) | Midpoint of 0.31-0.70 gap | Vocal band ratio, high freq ratio, ZCR |
+| Voice vs Instruments | Weighted composite | MFCC delta stability (weight 5.0) | Midpoint at 20.5 | Centroid (3.5), ZCR (3.0), harmonic ratio (2.5) |
 
-All thresholds were empirically calibrated against 7 test audio files spanning classical
-orchestral music, solo violin, organ, guitar, singing voice, and bird/nature recordings.
-The classifier does not use the filename or any metadata; it operates exclusively on
-the acoustic properties of the signal.
+All thresholds were empirically calibrated against 9 test audio files spanning classical
+orchestral music, solo violin, organ, guitar, singing voice with accompaniment, isolated
+vocals, and two distinct bioacoustic recordings. The classifier does not use the filename
+or any metadata; it operates exclusively on the acoustic properties of the signal.
 
 ## System Requirements
 
