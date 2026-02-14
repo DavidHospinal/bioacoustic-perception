@@ -242,3 +242,5 @@ If you use this project in your research or work, please cite it as follows:
     month = {feb}
 }
 ```
+![Banner Hospinal Systems](https://github.com/user-attachments/assets/005e1522-365f-46d3-9e38-fe6c9be880ae)
+
