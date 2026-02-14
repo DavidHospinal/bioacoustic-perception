@@ -41,7 +41,8 @@ Musical Instruments, Human Voice, or Bioacoustics.
 
 The system uses **YAMNet Lite**, a pre-trained deep neural network from Google, to classify audio. YAMNet is trained on the AudioSet corpus (over 2 million human-labeled audio clips) and can identify 521 distinct audio event categories.
 
-The application maps these 521 categories into three high-level classes:
+**Adaptation Strategy:**
+To align with the project's multidimensional visualization goals, we aggregate these 521 granular classes into three broad perceptual categories based on the AudioSet ontology hierarchy:
 
 - **Musical Instruments:** Includes music, musical instruments, and specific genres (YAMNet indices 132-276).
 - **Human Voice:** Includes speech, singing, choir, and human sounds (YAMNet indices 0-66).
@@ -165,6 +166,28 @@ McAdams, S. (1993). Recognition of sound sources and events. In S. McAdams & E. 
 *Thinking in Sound: The Cognitive Psychology of Human Audition* (pp. 146-198). Oxford University Press.
 DOI: 10.1093/acprof:oso/9780198524897.003.0006.
 PDF: https://www.mcgill.ca/mpcl/files/mpcl/mcadams_thinkingsound_1993.pdf
+
+### YAMNet and AudioSet
+
+**YAMNet Lite** (and its variants) is a deep neural network that predicts 521 audio event classes from the AudioSet corpus. It employs a MobileNetV1 architecture for efficiency (3.7M parameters).
+
+**Original Sources:**
+- **TensorFlow Hub (YAMNet):** Detailed model description, AudioSet evaluation performance (mAP 0.306, d-prime 2.318), and architecture documentation.
+  URL: https://www.tensorflow.org/hub/tutorials/yamnet
+- **TensorFlow Models Repository:** Source code and training metrics (balanced lwlrap 0.393).
+  GitHub: https://github.com/tensorflow/models/tree/master/research/audioset/yamnet
+- **Transfer Learning Tutorial:** Official guide for environmental classification tasks.
+  URL: https://www.tensorflow.org/tutorials/audio/transfer_learning_audio
+
+**Related Research:**
+- **AudioSet:** *Gemmeke, J. F. et al. (2017). Audio Set: An ontology and human-labeled dataset for audio events.*
+  IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP 2017).
+  The foundational dataset for YAMNet (632K labeled clips, 521 classes).
+  DOI: 10.1109/ICASSP.2017.7942281
+  PDF: https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/46657.pdf
+- **Edge Adaptation:** *YAMNet+ for Hearing Aids (2025).*
+  Lightweight extension for edge devices.
+  arXiv:2508.10360 (Preprint).
 
 Wattenberg, M. (2002). Arc Diagrams: Visualizing Structure in Strings.
 *IEEE Symposium on Information Visualization (InfoVis 2002)*.
