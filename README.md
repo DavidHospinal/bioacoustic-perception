@@ -174,14 +174,21 @@ sound-visual/
 - FLAC
 - OGG/Vorbis
 
-## Test Samples
+## Verified Test Cases
 
-The repository includes a `samples/` directory with diverse audio files for testing:
+The following files (included in `samples/`) have been verified with the system to ensure accurate classification across diverse genres:
 
-- **Human Voice:** `Audioslave.mp3` (Vocals), `Somebody To Love...` (Vocals), `vozhuman.mp3`.
-- **Musical Instruments:** `Vivaldi-winter.mp3`, `Bach - Toccata...`, `Stravinsky...`, `Paganini...`.
-- **Bioacoustics:** `pajaro.mp3`, `raindog.mp3`, `Morning...Himalaya.mp3`.
-- **Others:** `Bad Bunny...`, `Kasandr.mp3`.
+| Filename | Category | Sub-Genre / Description |
+|---|---|---|
+| `Vivaldi-winter.mp3` | **Musical Instruments** | Classical (Violin Concerto) |
+| `Johann Sebastian Bach - Toccata...mp3` | **Musical Instruments** | Classical (Organ) |
+| `paganini-caprice-n24-146225.mp3` | **Musical Instruments** | Classical (Violin Solo) |
+| `Igor Stravinsky - The Rite of Spring.mp3` | **Musical Instruments** | Classical (Orchestral) |
+| `Somebody To Love (Only Freddie's Vocals).mp3` | **Human Voice** | Acapella / Singing |
+| `Audioslave.mp3` | **Human Voice** | Rock Vocals (Voice dominant over band) |
+| `Kasandr.mp3` | **Musical Instruments** | Cumbia / Latin Rhythm |
+| `Morning, Mandal Valley...mp3` | **Bioacoustics** | Birdsong (Nightingale/Forest) |
+| `Bad Bunny - DtMF.mp3` | **Musical Instruments** | Urban / Reggaeton |
 
 You can use these files to verify the 3 main categories and the fallback mechanism, or load your own external files.
 
