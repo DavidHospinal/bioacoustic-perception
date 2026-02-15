@@ -96,6 +96,14 @@ class AnalysisWorker(QThread):
 
     def _run_classify(self):
         """Run AI classification on the full audio signal."""
+        # Check cache for existing classification first
+        if self.file_path:
+            cached = FeatureCache.load(self.file_path)
+            if cached and cached.get("classification"):
+                self.progress.emit("Loading cached classification...", 90)
+                self.classify_complete.emit(cached["classification"])
+                return
+
         def on_progress(msg, pct):
             self.progress.emit(msg, pct)
 

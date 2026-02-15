@@ -19,6 +19,7 @@ from core.audio_player import AudioPlayer
 from core.feature_mapper import FeatureMapper
 from core.audio_classifier import AudioClassifier
 from core.analysis_worker import AnalysisWorker
+from core.feature_cache import FeatureCache
 import config
 from datetime import datetime
 
@@ -107,12 +108,9 @@ class MainWindow(QMainWindow):
         self._set_controls_enabled(True)
         self.features = result["features"]
 
-        # Show cached classification if available
-        cached_class = result.get("classification")
-        if cached_class:
-            self.controls.set_classification(cached_class)
-        else:
-            self.controls.set_classification(None)
+        # Always start with "Awaiting playback..." for demo flow
+        # (cached classification is used after playback ends, not on load)
+        self.controls.set_classification(None)
 
         self.player.load(
             self.analyzer.get_raw_audio(),
@@ -211,8 +209,11 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def _on_worker_progress(self, message, percent):
-        """Update status bar with worker progress."""
+        """Update status bar and classification panel with worker progress."""
         self.statusBar().showMessage(f"{message} ({percent}%)")
+        # Show progress in classification panel during classify phase
+        if self._worker and self._worker.mode == AnalysisWorker.MODE_CLASSIFY:
+            self.controls.set_processing_status(message, percent)
 
     def _on_worker_error(self, error_msg):
         """Handle worker errors."""
@@ -240,6 +241,13 @@ class MainWindow(QMainWindow):
         self.controls.pause_btn.setEnabled(enabled)
         self.controls.stop_btn.setEnabled(enabled)
         self.controls.open_btn.setEnabled(enabled)
+
+    def _clear_predictions(self):
+        """Clear cached classification and reset display for fresh demo."""
+        self.controls.set_classification(None)
+        if self._current_file_path:
+            FeatureCache.clear_classification(self._current_file_path)
+        self.statusBar().showMessage("Predictions cleared.")
 
     # ------------------------------------------------------------------ #
     #  Visualization Parameters                                          #
@@ -329,6 +337,7 @@ class MainWindow(QMainWindow):
 
         view_menu = menu_bar.addMenu("&View")
         view_menu.addAction("&Reset Camera", self.scene.reset_camera)
+        view_menu.addAction("&Clear Predictions", self._clear_predictions)
 
     def _build_status_bar(self):
         self.setStatusBar(QStatusBar())

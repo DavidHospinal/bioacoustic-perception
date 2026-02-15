@@ -311,8 +311,60 @@ class ControlPanel(QWidget):
         """Display analysis information."""
         self.info_label.setText(info_text)
 
+    def set_processing_status(self, message, percent):
+        """Show real-time processing progress in the classification panel."""
+        self.class_category_label.setText(message)
+        self.class_category_label.setStyleSheet(
+            "font-size: 12px; font-weight: bold; color: #ffaa00;"
+            "padding: 4px 0px;")
+        self.confidence_bar.setValue(percent)
+        self.confidence_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #1a1a1a;
+                border: 1px solid #333333;
+                border-radius: 3px;
+                color: #cccccc;
+                font-size: 10px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #cc7700, stop:1 #ffaa00);
+                border-radius: 2px;
+            }
+        """)
+        self.class_details_label.setText("")
+        for i in range(len(self._score_name_labels)):
+            self._score_name_labels[i].setText("")
+            self._score_value_labels[i].setText("")
+
+    def _restore_confidence_style(self):
+        """Restore the default cyan confidence bar style."""
+        self.class_category_label.setStyleSheet(
+            "font-size: 13px; font-weight: bold; color: #00e5ff;"
+            "padding: 4px 0px;")
+        self.confidence_bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #1a1a1a;
+                border: 1px solid #333333;
+                border-radius: 3px;
+                color: #cccccc;
+                font-size: 10px;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #005577, stop:1 #00ccff);
+                border-radius: 2px;
+            }
+        """)
+
     def set_classification(self, result):
         """Display IA classification results."""
+        self._restore_confidence_style()
+
         if result is None:
             self.class_category_label.setText("Awaiting playback...")
             self.confidence_bar.setValue(0)

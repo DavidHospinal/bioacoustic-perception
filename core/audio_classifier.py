@@ -19,6 +19,7 @@ Performance optimizations:
 import os
 import csv
 import numpy as np
+import config
 
 
 class AudioClassifier:
@@ -146,29 +147,33 @@ class AudioClassifier:
         sum_outputs = np.zeros(521, dtype=np.float32)
         valid_frames = 0
 
-        if progress_callback:
-            progress_callback("Running YAMNet inference...", 35)
+        # Apply frame stride for faster inference (process every Nth frame)
+        stride = max(1, config.YAMNET_FRAME_STRIDE)
+        frames_to_process = list(range(0, num_frames, stride))
+        total_to_process = len(frames_to_process)
 
-        # Process each frame
-        for i in range(num_frames):
+        if progress_callback:
+            progress_callback(
+                f"Running YAMNet inference (0/{total_to_process})...", 35)
+
+        # Process sampled frames
+        for idx, i in enumerate(frames_to_process):
             start = i * self.INPUT_SIZE
             end = start + self.INPUT_SIZE
             frame = y_16k[start:end]
 
-            input_tensor = frame
-
-            self.interpreter.set_tensor(input_index, input_tensor)
+            self.interpreter.set_tensor(input_index, frame)
             self.interpreter.invoke()
             output_data = self.interpreter.get_tensor(output_index)[0]  # [521]
 
             sum_outputs += output_data
             valid_frames += 1
 
-            # Report progress during long inference loops
-            if progress_callback and valid_frames % 20 == 0:
-                pct = 35 + int((valid_frames / num_frames) * 45)
+            # Report progress every 5 processed frames
+            if progress_callback and (idx + 1) % 5 == 0:
+                pct = 35 + int(((idx + 1) / total_to_process) * 45)
                 progress_callback(
-                    f"YAMNet inference... ({valid_frames}/{num_frames})",
+                    f"YAMNet inference ({idx + 1}/{total_to_process})...",
                     min(pct, 80))
 
         if valid_frames > 0:
@@ -259,8 +264,12 @@ class AudioClassifier:
         flatness = librosa.feature.spectral_flatness(S=S)[0]
         rolloff = librosa.feature.spectral_rolloff(S=S, sr=sr)[0]
 
-        # HPSS on magnitude spectrogram (avoids expensive ISTFT reconstruction)
-        S_harm, S_perc = librosa.decompose.hpss(S)
+        # HPSS on magnitude spectrogram (limited to first N seconds for speed)
+        hpss_max_frames = min(
+            S.shape[1],
+            int(config.HPSS_MAX_DURATION * sr / config.HOP_LENGTH))
+        S_sub = S[:, :hpss_max_frames]
+        S_harm, S_perc = librosa.decompose.hpss(S_sub)
         harm_energy = np.sum(S_harm ** 2)
         total_hpss = harm_energy + np.sum(S_perc ** 2)
         harmonic_ratio = float(harm_energy / total_hpss) if total_hpss > 0 else 0.5

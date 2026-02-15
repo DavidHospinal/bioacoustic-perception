@@ -17,8 +17,8 @@ network from Google trained on AudioSet) with fallback to rule-based spectral sc
 
 - **PyQt6** - GUI framework with QThread-based background processing
 - **pyqtgraph** - 3D OpenGL rendering (GLViewWidget, GLScatterPlotItem, GLLinePlotItem)
-- **librosa** - Scientific audio analysis (spectral centroid, chromagram, MFCCs)
-- **soundfile** - Fast C-based audio I/O (primary decoder for WAV/FLAC/OGG)
+- **soundfile** - Fast C-based audio decoding (primary I/O for WAV/FLAC/OGG)
+- **librosa** - Spectral feature extraction (STFT, centroid, chromagram, MFCCs, HPSS)
 - **sounddevice** - Audio playback with frame-accurate synchronization
 - **ai-edge-litert** - TensorFlow Lite runtime for YAMNet inference
 - **NumPy / SciPy** - Numerical operations and signal processing

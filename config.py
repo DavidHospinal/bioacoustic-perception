@@ -70,3 +70,7 @@ PERSISTENT_ALPHA = 0.85
 
 # Audio playback
 AUDIO_BLOCK_SIZE = 1024
+
+# Classification performance
+HPSS_MAX_DURATION = 30    # Max seconds of audio for HPSS computation
+YAMNET_FRAME_STRIDE = 3   # Process every Nth YAMNet frame (1=all, 3=3x faster)

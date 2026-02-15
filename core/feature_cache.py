@@ -72,3 +72,12 @@ class FeatureCache:
             return
         data["classification"] = classification
         cls.save(file_path, data)
+
+    @classmethod
+    def clear_classification(cls, file_path):
+        """Remove classification from cache (keeps features for fast reload)."""
+        data = cls.load(file_path)
+        if data is None:
+            return
+        data.pop("classification", None)
+        cls.save(file_path, data)
