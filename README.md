@@ -21,6 +21,9 @@ network from Google trained on AudioSet) with fallback to rule-based spectral sc
 
 ## Technology Stack
 
+<img width="2752" height="1536" alt="unnamed (1)" src="https://github.com/user-attachments/assets/4c25716d-2d17-44c8-9ebc-6b2836c3142e" />
+
+
 <img width="1105" height="624" alt="image" src="https://github.com/user-attachments/assets/24dba293-7a79-4615-bbd2-9c1be1e51b76" />
 
 <img width="1273" height="607" alt="image" src="https://github.com/user-attachments/assets/7c2888f7-491e-478e-b36c-c8edb47efad6" />
