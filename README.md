@@ -15,6 +15,9 @@ network from Google trained on AudioSet) with fallback to rule-based spectral sc
 
 ## Technology Stack
 
+<img width="1711" height="888" alt="image" src="https://github.com/user-attachments/assets/7273a1ee-badd-4500-85a0-06a9cbf39edd" />
+
+
 - **PyQt6** - GUI framework with QThread-based background processing
 - **pyqtgraph** - 3D OpenGL rendering (GLViewWidget, GLScatterPlotItem, GLLinePlotItem)
 - **soundfile** - Fast C-based audio decoding (primary I/O for WAV/FLAC/OGG)
