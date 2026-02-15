@@ -13,9 +13,19 @@ network from Google trained on AudioSet) with fallback to rule-based spectral sc
 **Contact:** oscardavid.hospinal@uc.cl
 **Institution:** Pontificia Universidad Catolica de Chile
 
+<img width="1369" height="685" alt="image" src="https://github.com/user-attachments/assets/048a17cd-3357-47b1-9b5c-19df2e2d45ed" />
+
+<img width="1348" height="689" alt="image" src="https://github.com/user-attachments/assets/b6956470-ca69-4e55-92b5-3ce9201f879f" />
+
+
+
 ## Technology Stack
 
-<img width="1711" height="888" alt="image" src="https://github.com/user-attachments/assets/7273a1ee-badd-4500-85a0-06a9cbf39edd" />
+<img width="1105" height="624" alt="image" src="https://github.com/user-attachments/assets/24dba293-7a79-4615-bbd2-9c1be1e51b76" />
+
+<img width="1273" height="607" alt="image" src="https://github.com/user-attachments/assets/7c2888f7-491e-478e-b36c-c8edb47efad6" />
+
+
 
 
 - **PyQt6** - GUI framework with QThread-based background processing
@@ -197,6 +207,10 @@ You can use these files to verify the 3 main categories and the fallback mechani
 
 ## Performance Optimizations
 
+<img width="1232" height="606" alt="image" src="https://github.com/user-attachments/assets/6494fed7-4661-4822-9330-328913fccc22" />
+
+
+
 The application employs several strategies to maintain a responsive UI during heavy audio processing:
 
 ### Non-Blocking Pipeline (QThread)
@@ -315,6 +329,9 @@ PDF: https://rjwave.org/ijedr/viewpaperforall.php?paper=IJEDR1403017
 Herrera, P. et al. Automatic Classification of Musical Instrument Sounds.
 *Universitat Pompeu Fabra*.
 PDF: https://repositori.upf.edu/bitstreams/2ddfbd22-c9be-428a-9277-
+
+<img width="1245" height="531" alt="image" src="https://github.com/user-attachments/assets/561a4684-ac4a-4836-84b4-8d291e6b47d1" />
+
 
 ## License
 
