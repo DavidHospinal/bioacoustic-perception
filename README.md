@@ -274,7 +274,7 @@ If you use this project in your research or work, please cite it as follows:
     title = {Sound-Visual: Audio-Visual Analysis with AI Classification},
     type = {Open Source Software},
     author = {Hospinal R., Oscar David},
-    howpublished = {\url{https://github.com/DavidHospinal/-bioacoustic-perception}},
+    howpublished = {\url{https://github.com/DavidHospinal/bioacoustic-perception}},
     url = {https://github.com/DavidHospinal/-bioacoustic-perception},
     institution = {Pontificia Universidad Catolica de Chile},
     year = {2026},
