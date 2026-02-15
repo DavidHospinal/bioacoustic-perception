@@ -182,13 +182,13 @@ The following files (included in `samples/`) have been verified with the system 
 |---|---|---|
 | `Vivaldi-winter.mp3` | **Musical Instruments** | Classical (Violin Concerto) |
 | `Johann Sebastian Bach - Toccata...mp3` | **Musical Instruments** | Classical (Organ) |
-| `paganini-caprice-n24-146225.mp3` | **Musical Instruments** | Classical (Violin Solo) |
+| `paganini-caprice-n24-146225.mp3` | **Musical Instruments** | Classical (piano Solo) |
 | `Igor Stravinsky - The Rite of Spring.mp3` | **Musical Instruments** | Classical (Orchestral) |
 | `Somebody To Love (Only Freddie's Vocals).mp3` | **Human Voice** | Acapella / Singing |
 | `Audioslave.mp3` | **Human Voice** | Rock Vocals (Voice dominant over band) |
 | `Kasandr.mp3` | **Musical Instruments** | Cumbia / Latin Rhythm |
 | `Morning, Mandal Valley...mp3` | **Bioacoustics** | Birdsong (Nightingale/Forest) |
-| `Bad Bunny - DtMF.mp3` | **Musical Instruments** | Urban / Reggaeton |
+| `Bad Bunny - DtMF.mp3` | **Human Voice** | Urban / Reggaeton |
 
 You can use these files to verify the 3 main categories and the fallback mechanism, or load your own external files.
 
