@@ -1,5 +1,7 @@
 """
 Main application window with 3D viewport and control panel.
+All heavy processing (audio decoding, feature extraction, AI classification)
+runs on background QThreads to keep the UI responsive.
 """
 from PyQt6.QtWidgets import (
     QMainWindow, QSplitter, QStatusBar, QMessageBox, QVBoxLayout
@@ -16,6 +18,7 @@ from core.audio_analyzer import AudioAnalyzer
 from core.audio_player import AudioPlayer
 from core.feature_mapper import FeatureMapper
 from core.audio_classifier import AudioClassifier
+from core.analysis_worker import AnalysisWorker
 import config
 from datetime import datetime
 
@@ -33,6 +36,8 @@ class MainWindow(QMainWindow):
         self.classifier = AudioClassifier()
         self.animation = None
         self.features = None
+        self._worker = None
+        self._current_file_path = None
 
         self.scene = SceneManager()
         self.point_cloud = PointCloudRenderer(self.scene.get_widget())
@@ -67,8 +72,12 @@ class MainWindow(QMainWindow):
         self.controls.trail_length_changed.connect(self._on_trail_length_changed)
         self.controls.point_scale_changed.connect(self._on_point_scale_changed)
 
+    # ------------------------------------------------------------------ #
+    #  File Loading (background thread)                                  #
+    # ------------------------------------------------------------------ #
+
     def _on_file_loaded(self, file_path):
-        """Handles audio file selection."""
+        """Handles audio file selection. Starts background analysis."""
         if not validate_audio_file(file_path):
             QMessageBox.warning(
                 self, "Error",
@@ -77,22 +86,33 @@ class MainWindow(QMainWindow):
             return
 
         self._on_stop()
+        self._current_file_path = file_path
+        self._cancel_worker()
 
-        self.statusBar().showMessage("Analyzing audio...")
-        try:
-            self.analyzer.load(file_path)
-            self.features = self.analyzer.analyze()
-        except Exception as e:
-            QMessageBox.critical(
-                self, "Analysis Error",
-                f"Could not analyze file:\n{str(e)}")
-            self.statusBar().showMessage("Analysis error.")
-            return
+        # Prepare worker
+        worker = AnalysisWorker(AnalysisWorker.MODE_LOAD)
+        worker.file_path = file_path
+        worker.analyzer = self.analyzer
+        worker.mapper = self.mapper
+        worker.progress.connect(self._on_worker_progress)
+        worker.load_complete.connect(self._on_load_complete)
+        worker.error.connect(self._on_worker_error)
 
-        self.mapper.map_features(self.features)
+        self._worker = worker
+        self._set_controls_enabled(False)
+        worker.start()
 
-        # Classification deferred until playback finishes
-        self.controls.set_classification(None)
+    def _on_load_complete(self, result):
+        """Called when background loading/analysis finishes."""
+        self._set_controls_enabled(True)
+        self.features = result["features"]
+
+        # Show cached classification if available
+        cached_class = result.get("classification")
+        if cached_class:
+            self.controls.set_classification(cached_class)
+        else:
+            self.controls.set_classification(None)
 
         self.player.load(
             self.analyzer.get_raw_audio(),
@@ -100,8 +120,9 @@ class MainWindow(QMainWindow):
 
         self.controls.set_duration(self.features["duration"])
 
-        file_info = get_file_info(file_path)
+        file_info = get_file_info(self._current_file_path)
         now_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+        from_cache = result.get("from_cache", False)
         info_text = (
             f"Developer: Msc. David Hospinal\n"
             f"Analysis: {now_str}\n"
@@ -111,6 +132,8 @@ class MainWindow(QMainWindow):
             f"SR: {self.analyzer.get_sample_rate()} Hz\n"
             f"Hop: {config.HOP_LENGTH}"
         )
+        if from_cache:
+            info_text += "\n(Loaded from cache)"
         self.controls.set_analysis_info(info_text)
 
         self.scene.reset_camera()
@@ -125,6 +148,10 @@ class MainWindow(QMainWindow):
             f"Loaded: {file_info['name']} | "
             f"Duration: {self.features['duration']:.1f}s | "
             f"Frames: {self.features['n_frames']}")
+
+    # ------------------------------------------------------------------ #
+    #  Playback Controls                                                 #
+    # ------------------------------------------------------------------ #
 
     def _on_play(self):
         if self.animation is None:
@@ -152,24 +179,71 @@ class MainWindow(QMainWindow):
         self.controls.update_time_display(0.0)
         self.statusBar().showMessage("Stopped")
 
-    def _on_playback_finished(self):
-        """Playback ended — now run IA classification on full audio."""
-        self.statusBar().showMessage("Classifying audio (post-analysis)...")
-        from PyQt6.QtWidgets import QApplication
-        QApplication.processEvents()
+    # ------------------------------------------------------------------ #
+    #  Classification (background thread)                                #
+    # ------------------------------------------------------------------ #
 
-        try:
-            classification = self.classifier.classify(
-                self.features,
-                self.analyzer.get_raw_audio(),
-                self.analyzer.get_sample_rate())
-            self.controls.set_classification(classification)
-            self.statusBar().showMessage(
-                f"Classification: {classification['label']} "
-                f"({classification['confidence']:.0%})")
-        except Exception:
-            self.controls.set_classification(None)
-            self.statusBar().showMessage("Classification error.")
+    def _on_playback_finished(self):
+        """Playback ended. Start AI classification on background thread."""
+        self._cancel_worker()
+
+        worker = AnalysisWorker(AnalysisWorker.MODE_CLASSIFY)
+        worker.file_path = self._current_file_path
+        worker.analyzer = self.analyzer
+        worker.classifier = self.classifier
+        worker.features = self.features
+        worker.progress.connect(self._on_worker_progress)
+        worker.classify_complete.connect(self._on_classify_complete)
+        worker.error.connect(self._on_worker_error)
+
+        self._worker = worker
+        worker.start()
+
+    def _on_classify_complete(self, result):
+        """Called when background classification finishes."""
+        self.controls.set_classification(result)
+        self.statusBar().showMessage(
+            f"Classification: {result['label']} "
+            f"({result['confidence']:.0%})")
+
+    # ------------------------------------------------------------------ #
+    #  Worker Management                                                 #
+    # ------------------------------------------------------------------ #
+
+    def _on_worker_progress(self, message, percent):
+        """Update status bar with worker progress."""
+        self.statusBar().showMessage(f"{message} ({percent}%)")
+
+    def _on_worker_error(self, error_msg):
+        """Handle worker errors."""
+        self._set_controls_enabled(True)
+        QMessageBox.critical(
+            self, "Processing Error",
+            f"Could not process audio:\n{error_msg}")
+        self.statusBar().showMessage("Processing error.")
+
+    def _cancel_worker(self):
+        """Safely disconnect and discard any running worker."""
+        if self._worker is not None and self._worker.isRunning():
+            try:
+                self._worker.progress.disconnect()
+                self._worker.load_complete.disconnect()
+                self._worker.classify_complete.disconnect()
+                self._worker.error.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+        self._worker = None
+
+    def _set_controls_enabled(self, enabled):
+        """Enable or disable interactive controls during processing."""
+        self.controls.play_btn.setEnabled(enabled)
+        self.controls.pause_btn.setEnabled(enabled)
+        self.controls.stop_btn.setEnabled(enabled)
+        self.controls.open_btn.setEnabled(enabled)
+
+    # ------------------------------------------------------------------ #
+    #  Visualization Parameters                                          #
+    # ------------------------------------------------------------------ #
 
     def _on_trail_length_changed(self, value):
         if self.animation:
@@ -179,6 +253,10 @@ class MainWindow(QMainWindow):
         config.POINT_SIZE_SCALE = float(value)
         if self.features is not None:
             self.mapper.map_features(self.features)
+
+    # ------------------------------------------------------------------ #
+    #  Theme, Menu, Status Bar                                           #
+    # ------------------------------------------------------------------ #
 
     def _apply_dark_theme(self):
         self.setStyleSheet("""
@@ -206,6 +284,11 @@ class MainWindow(QMainWindow):
             }
             QPushButton:hover { background-color: #444444; }
             QPushButton:pressed { background-color: #222222; }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #555555;
+                border: 1px solid #3a3a3a;
+            }
             QSlider::groove:horizontal {
                 background: #333333;
                 height: 6px;
@@ -254,6 +337,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Clean up resources on window close."""
+        self._cancel_worker()
         if self.animation:
             self.animation.stop()
         self.player.stop()
@@ -266,4 +350,3 @@ class MainWindow(QMainWindow):
         legend_h = min(gl_widget.height() - 20, 600)
         self.spectral_legend.setGeometry(
             4, 10, 90, max(legend_h, 100))
-

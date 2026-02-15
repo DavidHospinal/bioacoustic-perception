@@ -6,8 +6,8 @@ Inspired by the work of Lucio Arese on multidimensional musical data visualizati
 The application extracts physical properties of sound (spectral centroid, chromagram, RMS energy,
 spectral bandwidth) and maps them to a 3D colored point cloud, synchronized in real time
 with audio playback. After full playback, an AI classifier categorizes the audio into
-Musical Instruments, Human Voice, or Bioacoustics, using rule-based scoring grounded in
-empirically calibrated spectral descriptors.
+Musical Instruments, Human Voice, or Bioacoustics, using YAMNet (a pre-trained deep neural
+network from Google trained on AudioSet) with fallback to rule-based spectral scoring.
 
 **Author:** Oscar David Hospinal R.
 **Contact:** oscardavid.hospinal@uc.cl
@@ -15,10 +15,12 @@ empirically calibrated spectral descriptors.
 
 ## Technology Stack
 
-- **PyQt6** - GUI framework
+- **PyQt6** - GUI framework with QThread-based background processing
 - **pyqtgraph** - 3D OpenGL rendering (GLViewWidget, GLScatterPlotItem, GLLinePlotItem)
 - **librosa** - Scientific audio analysis (spectral centroid, chromagram, MFCCs)
+- **soundfile** - Fast C-based audio I/O (primary decoder for WAV/FLAC/OGG)
 - **sounddevice** - Audio playback with frame-accurate synchronization
+- **ai-edge-litert** - TensorFlow Lite runtime for YAMNet inference
 - **NumPy / SciPy** - Numerical operations and signal processing
 
 ## Audio to Visual Mapping
@@ -78,7 +80,7 @@ While the classification decision is made by YAMNet, the application still extra
 |---|---|---|
 | Spectral centroid | Mean of `librosa.feature.spectral_centroid` | Dominant frequency (Hz). Indicates where most energy is concentrated. Low for instruments (~1000-1700 Hz), mid-high for voice (~1800-2600 Hz), high for bioacoustics (~2100-3700 Hz). |
 | Zero crossing rate (ZCR) | Mean of `librosa.feature.zero_crossing_rate` | Rate at which the signal crosses zero amplitude. High values indicate consonants, fricatives, or rapid modulations. Voice (~0.09-0.17) has higher ZCR than instruments (~0.05-0.11) due to consonant phonemes. |
-| Harmonic ratio | HPSS decomposition via `librosa.effects.hpss` | Ratio of harmonic energy to total energy. Tuned instruments produce highly harmonic signals (0.72-0.96), voice is moderately harmonic (0.70-0.81), and bioacoustics have low harmonicity (0.20-0.31) due to rapid chirps. This is the primary bioacoustics gate. |
+| Harmonic ratio | HPSS decomposition via `librosa.decompose.hpss(S)` | Ratio of harmonic energy to total energy. Tuned instruments produce highly harmonic signals (0.72-0.96), voice is moderately harmonic (0.70-0.81), and bioacoustics have low harmonicity (0.20-0.31) due to rapid chirps. This is the primary bioacoustics gate. Uses magnitude STFT directly, avoiding expensive ISTFT reconstruction. |
 | MFCC delta stability | Standard deviation of frame-to-frame MFCC differences | Measures how quickly the timbral characteristics change over time. Voice has high values (>21) due to transitions between vowels and consonants (formant shifts). Instruments maintain stable timbre (<20). This is the primary voice vs instruments discriminator. |
 | Vocal band ratio | Energy in 80-1100 Hz band vs total (via STFT) | Proportion of energy in the fundamental vocal frequency range. High for instruments with low fundamentals (0.60-0.96), variable for voice (0.51-0.83), very low for bioacoustics (0.04-0.23). |
 | High frequency ratio | Energy above 3 KHz vs total (via STFT) | Proportion of energy in high frequencies. Bioacoustics have the highest values (0.28-0.44), while instruments and voice concentrate energy below 3 KHz. |
@@ -144,9 +146,11 @@ sound-visual/
     config.py            # Global constants
     requirements.txt     # Dependencies
     core/
-        audio_analyzer.py    # Feature extraction (librosa)
+        audio_analyzer.py    # Feature extraction (soundfile + librosa)
         audio_player.py      # Playback (sounddevice)
-        audio_classifier.py  # AI rule-based classifier (3 categories)
+        audio_classifier.py  # YAMNet AI classifier (3 categories + fallback)
+        analysis_worker.py   # QThread background worker (non-blocking pipeline)
+        feature_cache.py     # Hash-based feature cache (.pkl)
         feature_mapper.py    # Feature -> visual property mapping
         color_mapping.py     # Chromagram -> HSV colors
     visualization/
@@ -155,9 +159,12 @@ sound-visual/
         trail_renderer.py        # Connection lines
         animation_controller.py  # Synchronized animation loop
     gui/
-        main_window.py   # Main window (dark theme)
-        control_panel.py # Control panel
+        main_window.py   # Main window (dark theme, worker integration)
+        control_panel.py # Control panel with classification display
         file_loader.py   # File loading utilities
+    models/
+        yamnet.tflite        # YAMNet TFLite model (not in repo)
+        yamnet_class_map.csv # 521-class label mapping (not in repo)
 ```
 
 ## Supported Audio Formats
@@ -177,6 +184,44 @@ The repository includes a `samples/` directory with diverse audio files for test
 - **Others:** `Bad Bunny...`, `Kasandr.mp3`.
 
 You can use these files to verify the 3 main categories and the fallback mechanism, or load your own external files.
+
+## Performance Optimizations
+
+The application employs several strategies to maintain a responsive UI during heavy audio processing:
+
+### Non-Blocking Pipeline (QThread)
+
+All CPU-intensive operations run on background `QThread` workers:
+
+| Phase | Operations | Thread |
+|---|---|---|
+| File Loading | Audio decoding, STFT, feature extraction, 3D mapping | Background (AnalysisWorker) |
+| Playback | Audio output + visualization rendering | Audio thread + GUI timer |
+| Classification | Legacy stats, HPSS, YAMNet inference | Background (AnalysisWorker) |
+
+Real-time progress is reported to the status bar via `pyqtSignal`, and controls are disabled during processing to prevent race conditions.
+
+### Fast Audio I/O
+
+Audio decoding uses **soundfile** (C-based libsndfile bindings) as the primary decoder for WAV, FLAC, and OGG formats. For codecs that soundfile cannot handle, the system falls back to **librosa.load()** (audioread + ffmpeg).
+
+### STFT Reuse
+
+The STFT magnitude matrix computed during feature extraction is cached on the `AudioAnalyzer` instance and passed to the classifier via the `S=` parameter. This eliminates redundant FFT computation in:
+- `spectral_flatness(S=S)` -- avoids internal STFT
+- `spectral_rolloff(S=S, sr=sr)` -- avoids internal STFT
+- `librosa.decompose.hpss(S)` -- operates on magnitude spectrogram directly, skipping the expensive ISTFT reconstruction that `librosa.effects.hpss(y)` performs
+- Vocal band energy and high-frequency ratio calculations
+
+### Feature Cache
+
+A hash-based caching system (`core/feature_cache.py`) stores analysis results as `.pkl` files in `.cache/`. The cache key is derived from `SHA-256(file_path | file_size | mtime_ns)`, ensuring automatic invalidation when the source file changes. Cached data includes:
+
+- Raw audio signal (avoids MP3 re-decoding)
+- Extracted features (times, centroid, chroma, RMS, bandwidth, MFCCs)
+- Classification result (added after first classification completes)
+
+On subsequent loads of the same file, all data is restored from cache, reducing load time from seconds to milliseconds.
 
 ## References
 

@@ -2,9 +2,13 @@
 Audio feature extraction using librosa.
 Computes all features in a single pass with consistent temporal alignment.
 Applies Savitzky-Golay smoothing for fluid, organic trajectories.
+
+Uses soundfile for fast audio decoding (WAV/FLAC/OGG) with librosa
+fallback for formats soundfile cannot handle (some MP3 codecs).
 """
 import numpy as np
 import librosa
+import soundfile as sf
 from scipy.signal import savgol_filter
 import config
 
@@ -26,11 +30,26 @@ class AudioAnalyzer:
         self.y = None
         self.duration = 0.0
         self.features = None
+        self._stft = None
 
     def load(self, file_path):
-        """Loads audio file, resamples to target SR. Returns raw signal."""
-        self.y, _ = librosa.load(file_path, sr=self.sr, mono=True)
-        self.duration = librosa.get_duration(y=self.y, sr=self.sr)
+        """
+        Loads audio file, resamples to target SR.
+        Uses soundfile (C-based, fast) with librosa fallback.
+        """
+        try:
+            data, file_sr = sf.read(file_path, dtype='float32')
+            if data.ndim > 1:
+                data = np.mean(data, axis=1)
+            if file_sr != self.sr:
+                data = librosa.resample(data, orig_sr=file_sr, target_sr=self.sr)
+            self.y = data
+        except Exception:
+            # Fallback for codecs soundfile cannot decode
+            self.y, _ = librosa.load(file_path, sr=self.sr, mono=True)
+
+        self.duration = len(self.y) / self.sr
+        self._stft = None
         return self.y
 
     def _smooth(self, signal):
@@ -50,6 +69,7 @@ class AudioAnalyzer:
 
         S = np.abs(librosa.stft(self.y, n_fft=self.n_fft,
                                 hop_length=self.hop_length))
+        self._stft = S
 
         centroid_raw = librosa.feature.spectral_centroid(
             S=S, sr=self.sr)[0]
@@ -94,3 +114,10 @@ class AudioAnalyzer:
     def get_sample_rate(self):
         """Returns the analysis sample rate."""
         return self.sr
+
+    def get_stft(self):
+        """Returns cached STFT magnitude. Recomputes from raw audio if needed."""
+        if self._stft is None and self.y is not None:
+            self._stft = np.abs(librosa.stft(
+                self.y, n_fft=self.n_fft, hop_length=self.hop_length))
+        return self._stft
